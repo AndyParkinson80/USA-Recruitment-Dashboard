@@ -1,0 +1,10 @@
+requests
+datetime
+pandas
+pyarrow
+openpyxl
+Jinja2
+google-cloud-storage
+google-cloud-bigquery
+google-auth
+google-cloud-secret-manager
