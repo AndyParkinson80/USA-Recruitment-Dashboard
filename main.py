@@ -11,10 +11,9 @@ from pathlib import Path
 
 from google.auth import default
 from google.cloud import bigquery, secretmanager
-from google.auth.transport.requests import Request
+from google.auth.exceptions import DefaultCredentialsError
+from google.oauth2 import service_account
 
-credentials,project = default()
-credentials.refresh(Request())
 
 current_folder = Path(__file__).resolve().parent
 data_store = current_folder/"Data - USA"
@@ -22,6 +21,59 @@ data_store = current_folder/"Data - USA"
 country = "USA"
 Data_export = False
 testing = False                                     #True uses local raw data drop, false uses API
+
+
+def google_auth():
+    """
+    Authenticate with Google Cloud and return credentials and project ID.
+    
+    First tries to use Application Default Credentials (ADC).
+    If that fails, uses service account credentials from GOOGLE_CLOUD_SECRET environment variable.
+    
+    Returns:
+        tuple: (credentials, project_id)
+        
+    Raises:
+        Exception: If both authentication methods fail
+    """
+    try:
+        # Try Application Default Credentials first
+        credentials, project_id = default()
+        print("Successfully authenticated using Application Default Credentials")
+        return credentials, project_id
+         
+    except DefaultCredentialsError:
+        print("Application Default Credentials not available, trying service account...")
+        
+        # Try service account from environment variable
+        secret_json = os.getenv('GOOGLE_CLOUD_SECRET')
+        if not secret_json:
+            raise Exception("GOOGLE_CLOUD_SECRET environment variable not found")
+        
+        try:
+            # Parse the JSON credentials
+            service_account_info = json.loads(secret_json)
+            
+            # Create credentials from service account info
+            credentials = service_account.Credentials.from_service_account_info(
+                service_account_info
+            )
+            
+            # Extract project ID from service account info
+            project_id = service_account_info.get('project_id')
+            if not project_id:
+                raise Exception("project_id not found in service account credentials")
+            
+            print("Successfully authenticated using service account credentials")
+            return credentials, project_id
+            
+        except json.JSONDecodeError:
+            raise Exception("Invalid JSON in GOOGLE_CLOUD_SECRET environment variable")
+        except Exception as e:
+            raise Exception(f"Failed to create service account credentials: {str(e)}")
+    
+    except Exception as e:
+        raise Exception(f"Authentication failed: {str(e)}")
 
 def get_secrets(secret_id):
     def access_secret_version(project_id, secret_id, version_id="latest"):
@@ -645,31 +697,34 @@ def reload_bigquery():
     delete_table_data(project_id, dataset_id, table_id)
     load_data(looker_data,project_id, dataset_id,table_id)
 
-client_id = get_secrets("ADP-usa-client-id")
-client_secret = get_secrets("ADP-usa-client-secret")
-keyfile = get_secrets("usa_cert_key")
-certfile = get_secrets("usa_cert_pem")
+if __name__ == "__main__":
+    credentials, project = google_auth()
 
-temp_certfile, temp_keyfile = load_ssl(certfile, keyfile)
+    client_id = get_secrets("ADP-usa-client-id")
+    client_secret = get_secrets("ADP-usa-client-secret")
+    keyfile = get_secrets("usa_cert_key")
+    certfile = get_secrets("usa_cert_pem")
 
-access_token  = security(client_id, client_secret,temp_keyfile,temp_certfile)
+    temp_certfile, temp_keyfile = load_ssl(certfile, keyfile)
 
-current_staff                                                                                           = GET_staff_adp()
-adp_applications                                                                                        = GET_applicants_adp(current_staff)
+    access_token  = security(client_id, client_secret,temp_keyfile,temp_certfile)
 
-if testing is False:
-    adp_reqs                                                                                                = GET_reqs()
-if testing:
-    print ("Loading data from saved requisitions")
-    file_path = os.path.join(data_store,"003 - Requisitions.json")
-    with open(file_path, "r") as file:
-        adp_reqs = json.load(file)
+    current_staff                                                                                           = GET_staff_adp()
+    adp_applications                                                                                        = GET_applicants_adp(current_staff)
 
-looker_data                                                                                             = filter_adp(adp_applications,adp_reqs)
-reload_bigquery()
+    if testing is False:
+        adp_reqs                                                                                                = GET_reqs()
+    if testing:
+        print ("Loading data from saved requisitions")
+        file_path = os.path.join(data_store,"003 - Requisitions.json")
+        with open(file_path, "r") as file:
+            adp_reqs = json.load(file)
 
-time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-print ("    Finishing Up (" + time_now + ")")
+    looker_data                                                                                             = filter_adp(adp_applications,adp_reqs)
+    reload_bigquery()
+
+    time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print ("    Finishing Up (" + time_now + ")")
 
 
 #Set-ExecutionPolicy Bypass -Scope Process
