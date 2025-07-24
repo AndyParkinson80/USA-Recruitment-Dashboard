@@ -726,9 +726,3 @@ if __name__ == "__main__":
     time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print ("    Finishing Up (" + time_now + ")")
 
-
-#Set-ExecutionPolicy Bypass -Scope Process
-#cd "C:\\Users\\andre\OneDrive - acornstairlifts.com\\001 - Data + Systems\\000 - Deployed Programs\\003 - USA Recruitment Dashboard"
-#gcloud builds submit --tag europe-west2-docker.pkg.dev/api-integrations-412107/usa-recruitment-dashboard/metrics:latest
-#gcloud run jobs update usa-recruitment-dashboard --image europe-west2-docker.pkg.dev/api-integrations-412107/usa-recruitment-dashboard/metrics:latest --region europe-west2
-#gcloud run jobs execute usa-recruitment-dashboard --region europe-west2
