@@ -8,15 +8,15 @@ import datetime
 import tarfile
 
 # Control flag
-runGcloud = False
+runGcloud = True
 
 # Configuration
 PROJECT_ID = os.environ.get("PROJECT_ID")
 REGION = "europe-west2"
-REPO = "integration"
-IMAGE_NAME = "integration"
+REPO = "usa-recruitment-dashboard"
+IMAGE_NAME = "metrics"
 TAG = f"{REGION}-docker.pkg.dev/{PROJECT_ID}/{REPO}/{IMAGE_NAME}:latest"
-JOB_NAME = "adp-integrations"
+JOB_NAME = "usa-recruitment-dashboard"
 BUCKET_NAME = f"gcf-artifacts-{PROJECT_ID}"  # Must exist
 SOURCE_TAR = "source.tar.gz"
 
