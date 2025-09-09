@@ -3,7 +3,6 @@ import math
 import json
 import os
 import pandas as pd
-import sys
 import tempfile
 
 from datetime import datetime, timedelta
