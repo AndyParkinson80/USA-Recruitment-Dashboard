@@ -25,54 +25,41 @@ testing = False                                     #True uses local raw data dr
 def google_auth():
     """
     Authenticate with Google Cloud and return credentials and project ID.
-    
-    First tries to use Application Default Credentials (ADC).
-    If that fails, uses service account credentials from GOOGLE_CLOUD_SECRET environment variable.
-    
-    Returns:
-        tuple: (credentials, project_id)
-        
-    Raises:
-        Exception: If both authentication methods fail
+
+    Order of preference:
+    1. Application Default Credentials (Cloud Run / gcloud ADC)
+    2. GOOGLE_CLOUD_SECRET environment variable (Codespaces / GitHub secret)
+    3. Local service account JSON file (~/.gcp/gcp.json)
     """
+
     try:
-        # Try Application Default Credentials first
+        # 1. Try Application Default Credentials
         credentials, project_id = default()
-        print("Successfully authenticated using Application Default Credentials")
+        print("✅ Authenticated using Application Default Credentials")
         return credentials, project_id
-         
+
     except DefaultCredentialsError:
-        print("Application Default Credentials not available, trying service account...")
-        
-        # Try service account from environment variable
+        print("⚠️ ADC not available, trying GOOGLE_CLOUD_SECRET env var...")
+
+        # 2. Try service account JSON from env var
         secret_json = os.getenv('GOOGLE_CLOUD_SECRET')
-        if not secret_json:
-            raise Exception("GOOGLE_CLOUD_SECRET environment variable not found")
-        
-        try:
-            # Parse the JSON credentials
+        if secret_json:
             service_account_info = json.loads(secret_json)
-            
-            # Create credentials from service account info
-            credentials = service_account.Credentials.from_service_account_info(
-                service_account_info
-            )
-            
-            # Extract project ID from service account info
+            credentials = service_account.Credentials.from_service_account_info(service_account_info)
             project_id = service_account_info.get('project_id')
-            if not project_id:
-                raise Exception("project_id not found in service account credentials")
-            
-            print("Successfully authenticated using service account credentials")
+            print("✅ Authenticated using service account from GOOGLE_CLOUD_SECRET")
             return credentials, project_id
-            
-        except json.JSONDecodeError:
-            raise Exception("Invalid JSON in GOOGLE_CLOUD_SECRET environment variable")
-        except Exception as e:
-            raise Exception(f"Failed to create service account credentials: {str(e)}")
-    
-    except Exception as e:
-        raise Exception(f"Authentication failed: {str(e)}")
+
+        # 3. Try service account JSON from local file
+        file_path = os.path.expanduser("~/.gcp/gcp.json")
+        if os.path.exists(file_path):
+            credentials = service_account.Credentials.from_service_account_file(file_path)
+            with open(file_path) as f_json:
+                project_id = json.load(f_json).get("project_id")
+            print(f"✅ Authenticated using local service account file: {file_path}")
+            return credentials, project_id
+
+        raise Exception("❌ No valid authentication method found (ADC, GOOGLE_CLOUD_SECRET, or local file).")
 
 def get_secrets(secret_id):
     def access_secret_version(project_id, secret_id, version_id="latest"):
