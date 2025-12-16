@@ -1,6 +1,8 @@
 import os
 import json
 import tempfile
+from google.auth import default
+from google.auth.exceptions import DefaultCredentialsError
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -8,10 +10,49 @@ import datetime
 import tarfile
 
 # Control flag
-runGcloud = False
+runGcloud = True
 
-# Configuration
-PROJECT_ID = os.environ.get("PROJECT_ID")
+# Step 1: Get credentials (moved to top since we need project_id first)
+def google_auth():
+    try:
+        # 1. Try Application Default Credentials (Cloud Run)
+        credentials, project_id = default()
+        print("✅ Authenticated with ADC")
+        return credentials, project_id
+
+    except DefaultCredentialsError:
+        print("⚠️ ADC not available, trying GOOGLE_CLOUD_SECRET env var...")
+
+        # 2. Service account from environment variable (Codespaces)
+        secret_json = os.getenv('GOOGLE_CLOUD_SECRET')
+        if secret_json:
+            service_account_info = json.loads(secret_json)
+            credentials = service_account.Credentials.from_service_account_info(
+                service_account_info,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            project_id = service_account_info.get('project_id')
+            print("✅ Authenticated with service account from env var")
+            return credentials, project_id
+
+        # 3. Local dev (service account file path)
+        file_path = os.getenv("GCP")
+        if file_path and os.path.exists(file_path):
+            credentials = service_account.Credentials.from_service_account_file(
+                file_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            with open(file_path) as f:
+                project_id = json.load(f).get("project_id")
+            print("✅ Authenticated with service account from file")
+            return credentials, project_id
+
+        raise Exception("❌ No valid authentication method found")
+
+# Initialize credentials and get project_id
+credentials, PROJECT_ID = google_auth()
+
+# Configuration (now PROJECT_ID is defined)
 REGION = "europe-west2"
 REPO = "usa-recruitment-dashboard"
 IMAGE_NAME = "metrics"
@@ -19,17 +60,6 @@ TAG = f"{REGION}-docker.pkg.dev/{PROJECT_ID}/{REPO}/{IMAGE_NAME}:latest"
 JOB_NAME = "usa-recruitment-dashboard"
 BUCKET_NAME = f"gcf-artifacts-{PROJECT_ID}"  # Must exist
 SOURCE_TAR = "source.tar.gz"
-
-# Step 1: Get secret
-GOOGLE_CLOUD_SECRET = os.environ.get("GOOGLE_CLOUD_SECRET")
-assert GOOGLE_CLOUD_SECRET, "GOOGLE_CLOUD_SECRET is not set"
-
-with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
-    temp_file.write(GOOGLE_CLOUD_SECRET)
-    temp_file.flush()
-    SERVICE_ACCOUNT_PATH = temp_file.name
-
-
 
 # Step 2: Package source code
 def create_tarball():
@@ -247,11 +277,6 @@ def update_and_run_job(credentials):
 
 
 if __name__ == "__main__":
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_PATH,
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-
     try:
         create_tarball()
         object_name = upload_source(credentials)
@@ -269,8 +294,3 @@ if __name__ == "__main__":
         if os.path.exists(SOURCE_TAR):
             os.remove(SOURCE_TAR)
             print(f"🗑️  Cleaned up: Deleted {SOURCE_TAR}")
-        
-        # Clean up: Delete the temporary service account file
-        if os.path.exists(SERVICE_ACCOUNT_PATH):
-            os.remove(SERVICE_ACCOUNT_PATH)
-            print(f"🗑️  Cleaned up: Deleted temporary service account file")
