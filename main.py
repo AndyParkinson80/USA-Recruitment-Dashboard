@@ -23,43 +23,34 @@ testing = False                                     #True uses local raw data dr
 
 
 def google_auth():
-    """
-    Authenticate with Google Cloud and return credentials and project ID.
-
-    Order of preference:
-    1. Application Default Credentials (Cloud Run / gcloud ADC)
-    2. GOOGLE_CLOUD_SECRET environment variable (Codespaces / GitHub secret)
-    3. Local service account JSON file (~/.gcp/gcp.json)
-    """
-
     try:
-        # 1. Try Application Default Credentials
+        # 1. Try Application Default Credentials (Cloud Run)
         credentials, project_id = default()
-        print("✅ Authenticated using Application Default Credentials")
+        print("✅ Authenticated with ADC")
         return credentials, project_id
 
     except DefaultCredentialsError:
         print("⚠️ ADC not available, trying GOOGLE_CLOUD_SECRET env var...")
 
-        # 2. Try service account JSON from env var
+        # 2. Codespaces (secret stored in env var)
         secret_json = os.getenv('GOOGLE_CLOUD_SECRET')
         if secret_json:
             service_account_info = json.loads(secret_json)
             credentials = service_account.Credentials.from_service_account_info(service_account_info)
             project_id = service_account_info.get('project_id')
-            print("✅ Authenticated using service account from GOOGLE_CLOUD_SECRET")
+            print("✅ Authenticated with service account from env var")
             return credentials, project_id
 
-        # 3. Try service account JSON from local file
-        file_path = os.path.expanduser("~/.gcp/gcp.json")
-        if os.path.exists(file_path):
+        # 3. Local dev (service account file path)
+        file_path = os.getenv("GCP")
+        if file_path and os.path.exists(file_path):
             credentials = service_account.Credentials.from_service_account_file(file_path)
-            with open(file_path) as f_json:
-                project_id = json.load(f_json).get("project_id")
-            print(f"✅ Authenticated using local service account file: {file_path}")
+            with open(file_path) as f:
+                project_id = json.load(f).get("project_id")
+            print("✅ Authenticated with service account from file")
             return credentials, project_id
 
-        raise Exception("❌ No valid authentication method found (ADC, GOOGLE_CLOUD_SECRET, or local file).")
+        raise Exception("❌ No valid authentication method found")
 
 def get_secrets(secret_id):
     def access_secret_version(project_id, secret_id, version_id="latest"):
@@ -115,6 +106,7 @@ def security(client_id,
              temp_keyfile,
              temp_certfile):
         time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print()
         print ("        Creating Credentials (" + time_now + ")")
 
         def adp_bearer():
@@ -151,7 +143,8 @@ def GET_staff_adp():
     formatted_date = months.strftime("%Y-%m-%d")
 
     time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print ("        Retrieving Current Staff from ADP Workforce Now (" + time_now + ")")
+    print()
+    print ("Retrieving Current Staff from ADP Workforce Now (" + time_now + ")")
     api_url = 'https://api.adp.com/hr/v2/workers'
     api_headers = {
             'Authorization': f'Bearer {access_token}',
@@ -201,7 +194,11 @@ def GET_staff_adp():
     skip_param = 0
 
     while True:
-        print (f"           Returning record # {total_records + 1} to {total_records + 100} of {rounded_total_number}")
+        print(
+            f"\r           Returning record # {total_records + 1} to {total_records + 100} of {rounded_total_number}",
+            end="",
+            flush=True
+        )
         make_api_request_active(skip_param)
         skip_param += 100
         total_records += 100 
@@ -273,7 +270,8 @@ def GET_applicants_adp(staff):
         formatted_date = months.strftime("%Y-%m-%d")
 
         time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print ("        Retrieving Applicants from ADP Workforce Now (" + time_now + ")")
+        print ()
+        print ("Retrieving Applicants from ADP Workforce Now (" + time_now + ")")
         api_url = 'https://api.adp.com/staffing/v2/job-applications'
         api_headers = {
                 'Authorization': f'Bearer {access_token}',
@@ -325,7 +323,13 @@ def GET_applicants_adp(staff):
         skip_param = 0
 
         while True:
-            print (f"           Returning record # {total_records + 1} to {total_records + 20} of {rounded_total_number}")
+            print(
+                f"\r           Returning record # {total_records + 1} to {total_records + 20} of {rounded_total_number}",
+                end="",
+                flush=True
+            )
+
+            
             make_api_request_active(skip_param)
             skip_param += 20
             total_records += 20 
@@ -489,7 +493,8 @@ def GET_applicants_adp(staff):
 def GET_reqs():
     #if testing is False:
     time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print ("        Retrieving Requisitions from ADP Workforce Now (" + time_now + ")")
+    print ()
+    print ("Retrieving Requisitions from ADP Workforce Now (" + time_now + ")")
     api_url = 'https://api.adp.com/staffing/v1/job-requisitions'
     api_headers = {
             'Authorization': f'Bearer {access_token}',
@@ -540,7 +545,12 @@ def GET_reqs():
     skip_param = 0
 
     while True:
-        print (f"Returning record # {total_records + 1} to {total_records + 20} of {rounded_total_number}")
+        print(
+            f"\r           Returning record # {total_records + 1} to {total_records + 20} of {rounded_total_number}",
+            end="",
+            flush=True
+        )
+
         make_api_request_active(skip_param)
         skip_param += 20
         total_records += 20 
@@ -654,7 +664,8 @@ def filter_adp(adp_applications,adp_reqs):
 
 def reload_bigquery():
     time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print ("        Rebuilding Data Table in bigquery (" + time_now + ")")
+    print ()
+    print ("Rebuilding Data Table in bigquery (" + time_now + ")")
 
     client = bigquery.Client(credentials=credentials, project=project)
 
