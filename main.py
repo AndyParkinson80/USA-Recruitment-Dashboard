@@ -18,7 +18,7 @@ current_folder = Path(__file__).resolve().parent
 data_store = current_folder/"Data - USA"
 
 country = "USA"
-Data_export = False
+Data_export = True
 testing = False                                     #True uses local raw data drop, false uses API
 
 
@@ -216,50 +216,61 @@ def GET_staff_adp():
             json.dump(combined_staff, outfile, indent=4)
 
     reordered_staff = []
+    dead_letters = []
     for staff in combined_staff:
-        forename = staff["person"]["legalName"]["givenName"]
-        middleName = staff["person"]["legalName"].get("middleName")
-        givenName = staff["person"]["legalName"].get("givenName")
-        preferredName = (
-            None
-            if not staff["person"].get("preferredName") 
-            else staff["person"]["preferredName"].get("givenName", "")
-        )        
-        surname = staff["person"]["legalName"]["familyName1"]
-        status = staff["workerStatus"]["statusCode"]["codeValue"]
-        hireDate = staff["workerDates"]["originalHireDate"]
-        address = staff["person"]["legalAddress"]["lineOne"]
-        dob = staff["person"]["birthDate"]
-        
-        position = next(
-            (index for index, field in enumerate(staff["workAssignments"]) if field["primaryIndicator"] is True),
-        )
+        try:
+            forename = staff["person"]["legalName"]["givenName"]
+            middleName = staff["person"]["legalName"].get("middleName")
+            givenName = staff["person"]["legalName"].get("givenName")
+            preferredName = (
+                None
+                if not staff["person"].get("preferredName") 
+                else staff["person"]["preferredName"].get("givenName", "")
+            )        
+            surname = staff["person"]["legalName"]["familyName1"]
+            status = staff["workerStatus"]["statusCode"]["codeValue"]
+            hireDate = staff["workerDates"]["originalHireDate"]
+            address = staff["person"]["legalAddress"]["lineOne"]
+            dob = staff["person"]["birthDate"]
+            
+            position = next(
+                (index for index, field in enumerate(staff["workAssignments"]) if field["primaryIndicator"] is True),
+            )
 
-        manager = staff["workAssignments"][position].get("reportsTo",None)
-        if manager:
-            formatted_name = manager[0]["reportsToWorkerName"].get("formattedName", "") 
+            manager = staff["workAssignments"][position].get("reportsTo", None)
+            formatted_name = None
+            if manager:
+                formatted_name = manager[0]["reportsToWorkerName"].get("formattedName", "") 
 
-        transformed_staff = {
-            "Forename": forename,
-            "MiddleName": middleName,
-            "givenName": givenName,
-            "prefferedName": preferredName,
-            "Surname": surname,
-            "Status": status,
-            "BirthDate": dob,
-            "Address": address,
-            "Hire Date": hireDate,
-            "Manager": formatted_name
-        }
-        
-        reordered_staff.append(transformed_staff)
-    
+            transformed_staff = {
+                "Forename": forename,
+                "MiddleName": middleName,
+                "givenName": givenName,
+                "prefferedName": preferredName,
+                "Surname": surname,
+                "Status": status,
+                "BirthDate": dob,
+                "Address": address,
+                "Hire Date": hireDate,
+                "Manager": formatted_name
+            }
+            
+            reordered_staff.append(transformed_staff)
+        except Exception as e:
+            dead_letters.append({
+                "staff": staff,
+                "error": str(e)
+            })
+
     filtered_staff = [record for record in reordered_staff if record["Status"] in ["Active", "Inactive"]]
     
     if Data_export:     
         file_path = os.path.join(data_store,"001b - Reordered + Filtered Staff.json")
         with open(file_path, "w") as outfile:
             json.dump(filtered_staff, outfile, indent=4)
+        file_path = os.path.join(data_store,"001b - Dead Letters.json")
+        with open(file_path, "w") as outfile:
+            json.dump(dead_letters, outfile, indent=4)
     
     return filtered_staff
 
@@ -382,6 +393,8 @@ def GET_applicants_adp(staff):
         if "Guerrero" in recruiter:
             recruiter = "Robinson Guerrero"
         elif "Dana" in recruiter:
+            recruiter = "Dana Schwartz"
+        elif "Schwartz" in recruiter:
             recruiter = "Dana Schwartz"
         elif "Julia" in recruiter:
             recruiter = "Julia Peoples"
