@@ -18,7 +18,7 @@ current_folder = Path(__file__).resolve().parent
 data_store = current_folder/"Data - USA"
 
 country = "USA"
-Data_export = False
+Data_export = True
 testing = False                                     #True uses local raw data drop, false uses API
 
 
@@ -217,6 +217,7 @@ def GET_staff_adp():
 
     reordered_staff = []
     dead_letters = []
+    dead_letters = []
     for staff in combined_staff:
         try:
             forename = staff["person"]["legalName"]["givenName"]
@@ -236,7 +237,29 @@ def GET_staff_adp():
             position = next(
                 (index for index, field in enumerate(staff["workAssignments"]) if field["primaryIndicator"] is True),
             )
+        try:
+            forename = staff["person"]["legalName"]["givenName"]
+            middleName = staff["person"]["legalName"].get("middleName")
+            givenName = staff["person"]["legalName"].get("givenName")
+            preferredName = (
+                None
+                if not staff["person"].get("preferredName") 
+                else staff["person"]["preferredName"].get("givenName", "")
+            )        
+            surname = staff["person"]["legalName"]["familyName1"]
+            status = staff["workerStatus"]["statusCode"]["codeValue"]
+            hireDate = staff["workerDates"]["originalHireDate"]
+            address = staff["person"]["legalAddress"]["lineOne"]
+            dob = staff["person"]["birthDate"]
+            
+            position = next(
+                (index for index, field in enumerate(staff["workAssignments"]) if field["primaryIndicator"] is True),
+            )
 
+            manager = staff["workAssignments"][position].get("reportsTo", None)
+            formatted_name = None
+            if manager:
+                formatted_name = manager[0]["reportsToWorkerName"].get("formattedName", "") 
             manager = staff["workAssignments"][position].get("reportsTo", None)
             formatted_name = None
             if manager:
@@ -393,6 +416,8 @@ def GET_applicants_adp(staff):
         if "Guerrero" in recruiter:
             recruiter = "Robinson Guerrero"
         elif "Dana" in recruiter:
+            recruiter = "Dana Schwartz"
+        elif "Schwartz" in recruiter:
             recruiter = "Dana Schwartz"
         elif "Julia" in recruiter:
             recruiter = "Julia Peoples"
