@@ -217,7 +217,26 @@ def GET_staff_adp():
 
     reordered_staff = []
     dead_letters = []
+    dead_letters = []
     for staff in combined_staff:
+        try:
+            forename = staff["person"]["legalName"]["givenName"]
+            middleName = staff["person"]["legalName"].get("middleName")
+            givenName = staff["person"]["legalName"].get("givenName")
+            preferredName = (
+                None
+                if not staff["person"].get("preferredName") 
+                else staff["person"]["preferredName"].get("givenName", "")
+            )        
+            surname = staff["person"]["legalName"]["familyName1"]
+            status = staff["workerStatus"]["statusCode"]["codeValue"]
+            hireDate = staff["workerDates"]["originalHireDate"]
+            address = staff["person"]["legalAddress"]["lineOne"]
+            dob = staff["person"]["birthDate"]
+            
+            position = next(
+                (index for index, field in enumerate(staff["workAssignments"]) if field["primaryIndicator"] is True),
+            )
         try:
             forename = staff["person"]["legalName"]["givenName"]
             middleName = staff["person"]["legalName"].get("middleName")
