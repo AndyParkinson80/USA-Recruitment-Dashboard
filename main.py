@@ -18,7 +18,7 @@ current_folder = Path(__file__).resolve().parent
 data_store = current_folder/"Data - USA"
 
 country = "USA"
-Data_export = True
+Data_export = False
 testing = False                                     #True uses local raw data drop, false uses API
 
 
@@ -217,26 +217,7 @@ def GET_staff_adp():
 
     reordered_staff = []
     dead_letters = []
-    dead_letters = []
     for staff in combined_staff:
-        try:
-            forename = staff["person"]["legalName"]["givenName"]
-            middleName = staff["person"]["legalName"].get("middleName")
-            givenName = staff["person"]["legalName"].get("givenName")
-            preferredName = (
-                None
-                if not staff["person"].get("preferredName") 
-                else staff["person"]["preferredName"].get("givenName", "")
-            )        
-            surname = staff["person"]["legalName"]["familyName1"]
-            status = staff["workerStatus"]["statusCode"]["codeValue"]
-            hireDate = staff["workerDates"]["originalHireDate"]
-            address = staff["person"]["legalAddress"]["lineOne"]
-            dob = staff["person"]["birthDate"]
-            
-            position = next(
-                (index for index, field in enumerate(staff["workAssignments"]) if field["primaryIndicator"] is True),
-            )
         try:
             forename = staff["person"]["legalName"]["givenName"]
             middleName = staff["person"]["legalName"].get("middleName")
@@ -279,6 +260,7 @@ def GET_staff_adp():
             }
             
             reordered_staff.append(transformed_staff)
+            
         except Exception as e:
             dead_letters.append({
                 "staff": staff,
@@ -387,60 +369,67 @@ def GET_applicants_adp(staff):
             combined_applications = json.load(file)
 
     reordered_applications = []
+    dead_letters_app = []
     for apps in combined_applications:
-        name = apps["applicant"]["person"]["personName"]["formattedName"]
-        forename = apps["applicant"]["person"]["personName"]["givenName"]
-        surname = apps["applicant"]["person"]["personName"]["familyName1"]
+        try:
+            name = apps["applicant"]["person"]["personName"].get("formattedName","")
+            forename = apps["applicant"]["person"]["personName"].get("givenName","")
+            surname = apps["applicant"]["person"]["personName"].get("familyName1","")
 
-        app_start = apps["applicationStatusCode"]["effectiveDate"]
-        app_dob = apps["applicant"]["person"].get("birthDate")
-        app_status = apps["applicationStatusCode"]["shortName"]
-        app_job = apps["jobRequisitionReference"].get("requisitionTitle")
-        
-        hiring_manager = str(apps["jobRequisitionReference"].get("hiringManager", {}).get("personName", {}).get("formattedName"))
-        if hiring_manager:
-            names = hiring_manager.split(", ")
-            if len(names) == 2:
-                secondName,firstName = names
-                lineManager = f"{firstName} {secondName}"
-            else:
-                lineManager = ""
+            app_start = apps["applicationStatusCode"].get("effectiveDate","")
+            app_dob = apps["applicant"]["person"].get("birthDate","")
+            app_status = apps["applicationStatusCode"].get("shortName","")
+            app_job = apps["jobRequisitionReference"].get("requisitionTitle","")
+            
+            hiring_manager = str(apps["jobRequisitionReference"].get("hiringManager", {}).get("personName", {}).get("formattedName",""))
+            if hiring_manager:
+                names = hiring_manager.split(", ")
+                if len(names) == 2:
+                    secondName,firstName = names
+                    lineManager = f"{firstName} {secondName}"
+                else:
+                    lineManager = ""
 
-        if lineManager == "Zacri Byam":
-            lineManager = "Zac Byam"
-        
-        recruiter = str(apps["jobRequisitionReference"].get("recruiter", {}).get("personName", {}).get("formattedName"))
-        requisition_id = apps["jobRequisitionReference"].get("requisitionID")
-        address = apps["applicant"]["person"]["address"].get("lineOne","")
+            if lineManager == "Zacri Byam":
+                lineManager = "Zac Byam"
+            
+            recruiter = str(apps["jobRequisitionReference"].get("recruiter", {}).get("personName", {}).get("formattedName",""))
+            requisition_id = apps["jobRequisitionReference"].get("requisitionID","")
+            address = apps["applicant"]["person"]["address"].get("lineOne","")
 
-        if "Guerrero" in recruiter:
-            recruiter = "Robinson Guerrero"
-        elif "Dana" in recruiter:
-            recruiter = "Dana Schwartz"
-        elif "Schwartz" in recruiter:
-            recruiter = "Dana Schwartz"
-        elif "Julia" in recruiter:
-            recruiter = "Julia Peoples"
-        elif "Robyn" in recruiter:
-            recruiter = "Robyn Halliday"
-        
-        transformed_record = {
-            "CandidateName": name,
-            "forename": forename,
-            "surname": surname,
-            "DOB": app_dob,
-            "ApplicationStatus": app_status,
-            "JobTitle": app_job,
-            "HiringManager": hiring_manager,
-            "LineManager": lineManager,
-            "Recruiter": recruiter,
-            "Requisition_ID": requisition_id,
-            "Start Date": app_start,
-            "Address": address,
-            "Match Made": None,
-        }
-        
-        reordered_applications.append(transformed_record)
+            if "Guerrero" in recruiter:
+                recruiter = "Robinson Guerrero"
+            elif "Dana" in recruiter:
+                recruiter = "Dana Schwartz"
+            elif "Schwartz" in recruiter:
+                recruiter = "Dana Schwartz"
+            elif "Julia" in recruiter:
+                recruiter = "Julia Peoples"
+            elif "Robyn" in recruiter:
+                recruiter = "Robyn Halliday"
+            
+            transformed_record = {
+                "CandidateName": name,
+                "forename": forename,
+                "surname": surname,
+                "DOB": app_dob,
+                "ApplicationStatus": app_status,
+                "JobTitle": app_job,
+                "HiringManager": hiring_manager,
+                "LineManager": lineManager,
+                "Recruiter": recruiter,
+                "Requisition_ID": requisition_id,
+                "Start Date": app_start,
+                "Address": address,
+                "Match Made": None,
+            }
+            
+            reordered_applications.append(transformed_record)
+        except Exception as e:
+            dead_letters_app.append({
+                "staff": apps,
+                "error": str(e)
+            })
 
     for app in reordered_applications:                          #Tries to find a matching staff member in the ADP record
         app_forename = app.get("forename", "").lower()
@@ -494,7 +483,9 @@ def GET_applicants_adp(staff):
         file_path = os.path.join(data_store,"002b - New Applications.json")
         with open(file_path, "w") as outfile:
             json.dump(reordered_applications, outfile, indent=4)
-    
+        file_path = os.path.join(data_store,"002c - Dead letters applications.json")
+        with open(file_path, "w") as outfile:
+            json.dump(dead_letters_app, outfile, indent=4)
 
     keywords_to_include = ["Offer","Screening","Hire"]
     keywords_to_exclude = ["Deleted","Declined"]
